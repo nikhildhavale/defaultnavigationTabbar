@@ -43,13 +43,29 @@ Baking the colour into the image (`item.image?.withTintColor(_, renderingMode: .
 
 ## 2. What works
 
-### Tab bar background — the plain `UIView` property
+### Tab bar background — the plain `UIView` property, iOS 27+ only
 
 ```swift
-tabBar.backgroundColor = tint   // iOS 26+: the ONLY thing that paints the bar
+tabBar.backgroundColor = tint   // the ONLY thing that paints the glass bar
 ```
 
 This also drops the floating capsule for a full-width opaque bar.
+
+**Gate it to iOS 27, not 26.** On iOS 26 the same line composites *under* the glass rather
+than replacing it, giving a pale, washed-out fill (`(255,194,183)` for `systemRed`) while
+unselected labels stay dark — it reads as a bug. On 26, leave the system bar alone and tint
+only the selected item, which reads as deliberate:
+
+```swift
+if #available(iOS 27.0, *) {
+    tabBar.backgroundColor = tint
+    tabBar.tintColor = barForeground
+} else if #available(iOS 26.0, *) {
+    tabBar.tintColor = tint          // red selected item on the system glass bar
+} else {
+    // classic UITabBarAppearance path, below
+}
+```
 
 ### Unselected item colour — via the window's interface style
 
@@ -58,18 +74,20 @@ style (not the bar's own). So force the window dark and force the content back t
 
 ```swift
 // SceneDelegate
-if #available(iOS 26.0, *) {
+if #available(iOS 27.0, *) {
     window.overrideUserInterfaceStyle = .dark
 }
 
 // every navigation controller / content container
-if #available(iOS 26.0, *) {
+if #available(iOS 27.0, *) {
     navigationController.overrideUserInterfaceStyle = .light
 }
 ```
 
 Without the second line the whole app turns dark. Watch for other system UI (alerts, action
-sheets, keyboards) presented outside those containers — they inherit the dark window.
+sheets, keyboards) presented outside those containers — they inherit the dark window. Gated
+to iOS 27 as well: on 26 it does nothing for the bar and would only darken system UI for no
+benefit.
 
 ### White back chevron
 
@@ -119,10 +137,14 @@ The classic bar honours the appearance API normally, so keep both paths:
 
 ```swift
 private static func styleTabBar(_ tabBar: UITabBar) {
-    tabBar.tintColor = barForeground
+    if #available(iOS 27.0, *) {
+        tabBar.backgroundColor = tabBarBackground
+        tabBar.tintColor = barForeground
+        return
+    }
 
     if #available(iOS 26.0, *) {
-        tabBar.backgroundColor = tabBarBackground
+        tabBar.tintColor = tint
         return
     }
 
@@ -146,6 +168,7 @@ private static func styleTabBar(_ tabBar: UITabBar) {
     tabBar.standardAppearance = appearance
     tabBar.scrollEdgeAppearance = appearance
     tabBar.unselectedItemTintColor = unselected
+    tabBar.tintColor = barForeground
 }
 ```
 
@@ -161,15 +184,17 @@ centred one.
 
 ## 4. Coverage — apply this honestly
 
-| | tab bar fill | unselected label | nav bar |
+| | tab bar | unselected label | nav bar |
 |---|---|---|---|
-| iOS 18.5 | solid | white @ 65% | works |
-| **iOS 26.0** | **pale pink — fill composites under the glass** | **stays dark** | works |
-| iOS 27.0 | solid | white | works |
+| iOS 18.5 | solid fill | white @ 65% | works |
+| iOS 26.0 | system glass + tinted selected item (fallback) | system default | works |
+| iOS 27.0 | solid fill | white | works |
 
-**The tab bar half of this only fully works on iOS 27.** If the target app must support
-iOS 26, either accept the system glass bar there (tint the selected item only) or re-run the
-bisect in §5 against a 26 runtime — its glass may respond to a different property.
+**A solid fill is only achievable on iOS 27**, so the recipe above falls back to the
+untouched system bar on 26. Since iOS 27 shipped in September 2026 and 26 runs on the same
+devices, expect the fallback to be what most users see for some months — design for it, do
+not treat it as an edge case. If a solid fill on 26 is a hard requirement, re-run the bisect
+in §5 against a 26 runtime; its glass pipeline differs and may respond to another property.
 
 ## 5. How to verify (do not trust the docs or the headers)
 

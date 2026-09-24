@@ -41,24 +41,33 @@ enum AppRootBuilder {
         return tabBarController
     }
 
-    /// Paints the tab bar red with white items, on both designs.
+    /// Paints the tab bar, taking the best result each OS version allows.
     ///
-    /// iOS 26+ draws a floating Liquid Glass bar that ignores UITabBarAppearance's
-    /// background entirely (backgroundColor, backgroundImage, backgroundEffect,
-    /// barTintColor and isTranslucent all do nothing) -- the plain UIView
-    /// background is what paints it, and doing so also drops the glass capsule
-    /// for a full-width opaque bar. That bar also ignores unselectedItemTintColor
-    /// and the appearance item colours, drawing unselected items with
-    /// `labelColor` resolved against the WINDOW's interface style; SceneDelegate
-    /// forces the window dark for that, and each navigation controller forces its
-    /// own content back to light.
+    /// iOS 27+: the floating Liquid Glass bar ignores the whole background half of
+    /// UITabBarAppearance (backgroundColor, backgroundImage, backgroundEffect,
+    /// barTintColor and isTranslucent all do nothing). The plain UIView background
+    /// is what paints it, and doing so also drops the capsule for a full-width
+    /// opaque bar. That bar likewise ignores unselectedItemTintColor and the
+    /// appearance item colours, drawing unselected items with `labelColor`
+    /// resolved against the WINDOW's interface style -- hence the dark window in
+    /// SceneDelegate, with each navigation controller forced back to light.
     ///
-    /// iOS 25 and earlier use the classic bar, where the appearance API works.
+    /// iOS 26: the same UIView background composites *under* the glass instead of
+    /// replacing it, so the fill washes out to pale pink, and the window trick has
+    /// no effect on the unselected labels. A washed-out bar with dark labels reads
+    /// as a bug, so leave the system bar alone here and only tint the selected
+    /// item -- that reads as deliberate.
+    ///
+    /// iOS 25 and earlier: the classic bar, where the appearance API works.
     private static func styleTabBar(_ tabBar: UITabBar) {
-        tabBar.tintColor = barForeground
+        if #available(iOS 27.0, *) {
+            tabBar.backgroundColor = tabBarBackground
+            tabBar.tintColor = barForeground
+            return
+        }
 
         if #available(iOS 26.0, *) {
-            tabBar.backgroundColor = tabBarBackground
+            tabBar.tintColor = tint
             return
         }
 
@@ -82,6 +91,7 @@ enum AppRootBuilder {
         tabBar.standardAppearance = appearance
         tabBar.scrollEdgeAppearance = appearance
         tabBar.unselectedItemTintColor = unselected
+        tabBar.tintColor = barForeground
     }
 
     static func makeNavigationController(
@@ -109,7 +119,7 @@ enum AppRootBuilder {
         navigationController.navigationBar.compactScrollEdgeAppearance = appearance
         // Back chevron and bar button items, drawn on top of the red bar.
         navigationController.navigationBar.tintColor = barForeground
-        if #available(iOS 26.0, *) {
+        if #available(iOS 27.0, *) {
             // Keep page content light even though the window is forced dark.
             navigationController.overrideUserInterfaceStyle = .light
         }

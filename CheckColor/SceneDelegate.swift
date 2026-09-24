@@ -18,9 +18,10 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let window = UIWindow(windowScene: windowScene)
         window.rootViewController = AppRootBuilder.makeRootViewController()
         window.tintColor = AppRootBuilder.tint
-        if #available(iOS 26.0, *) {
+        if #available(iOS 27.0, *) {
             // Makes the tab bar's unselected items resolve `labelColor` to white;
-            // see AppRootBuilder.styleTabBar.
+            // see AppRootBuilder.styleTabBar. Not done on iOS 26, where it has no
+            // effect on the bar and would only darken system UI.
             window.overrideUserInterfaceStyle = .dark
         }
         window.makeKeyAndVisible()
